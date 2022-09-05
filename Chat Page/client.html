@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang = 'en'>
+    <head>
+        <title>Chit-Chat</title>
+        <style>
+            #home{
+                display: none;
+            }
+        </style>
+        <script src="/socket.io/socket.io.js"></script>
+    </head>
+    <body>
+        <div id = "messages"></div>
+        <div id = "home">
+            <input type="text" id="message_input"/>
+            <input type = "button" onclick="sendMessage()" id = "sendBtn" value = "Send Chat"/>
+            <br>
+            
+            <input type="text" id="newChat"/>
+            <input type = "button" onclick="newChat()" id="newChatBtn" value = "Create Chat Room"/>
+            <br>
+            
+            <form method = "post" id = "privateChatForm"> 
+                <input type="text" id="newPrivateChatID" placeholder = "chat name"/>
+                <input type = "password" placeholder = "password" id = "roomPW"/>
+                <input type = "button" onclick="newPrivateChat()" value = "Create Private ChatRoom"/>
+            </form>
+            <br>
+
+            <form method = "post" id = "newFriend"> 
+                <input type="text" id="newFriendID" placeholder = "friend name"/>
+                <input type = "button" onclick="newFriend()" value = "Add a friend"/>
+            </form>
+            <br>
+
+            <form method = "post" id = "kickUser"> 
+                <input type="text" id="userToKick" placeholder = "kick a user"/>
+                <input type = "button" onclick="kick()" value = "Kick"/>
+            </form>
+            <br>
+
+            <form method = "post" id = "banUser"> 
+                <input type="text" id="userToBan" placeholder = "Ban a user"/>
+                <input type = "button" onclick="ban()" value = "Ban"/>
+            </form>
+            <br>
+
+            <form method = "post" id = "makeAdmin"> 
+                <input type="text" id="userToAdmin" placeholder = "Add an Admin"/>
+                <input type = "button" onclick="addAdmin()" value = "Add admin"/>
+            </form>
+            <br>
+
+            <form method = "post" id = "joinStuff"> 
+                <input type="text" id="joinChatID" placeholder = "chat name"/>
+                <input type = "password" placeholder = "password if applicable" id = "joinChatPW"/>
+                <input type = "button" onclick="joinChat()" value = "Join"/>
+            </form>
+            <br>
+
+            <form method = "post" id = "pmform"> 
+                <input type="text" id="pm" placeholder = "private message content"/>
+                <input type = "text" placeholder = "user to pm" id = "userPM"/>
+                <input type = "button" onclick="privateMessage()" value = "Send PM"/>
+            </form>
+            <br>
+            
+            <input type = "button" onclick="leaveRoom()" id = "leaving" value = "leave room"/>
+
+            <div id = "chatters"></div>
+            <div id = "allChats">
+                <p>Exisiting Chats:</p>
+            </div>
+        </div>
+
+        <div id = "newuser">
+            <input type="text" id="username"/>
+            <input type="button" onclick="setUser()" value = "Create User"/>
+
+            <p id = "printUsername"></p>
+            <p id = "alertMessage"> </p>
+        </div>
+
+        <script>
+            let currRoomTemp = "";
+            let username = "";
+            let currRoom = '';
+            let currAdmins = []
+            var socketio = io.connect();
+            let s = 0
+            // import io from 'socket.io-client';
+        
+            socketio.on("message_to_client",function(data) {
+                console.log(data["message"]);
+                document.getElementById("messages").appendChild(document.createElement("hr"));
+                document.getElementById("messages").appendChild(document.createTextNode(data["username"] + ": " + data['message']));
+            });
+        
+            //grabs data from signup status and sets username
+            socketio.on("signupStatus",function(data) {
+                
+                if(username == data["username"]){
+                    console.log("comparison success")
+            
+                    if(!data["result"]){
+                        console.log("failed")
+                        alert("failed.");
+                        username = "";
+                    }
+            
+                    if(data["result"]){
+                        alert("user created");
+                        console.log(data["username"]);
+                        document.getElementById("kickUser").style.display = "none";
+                        document.getElementById("userToKick").style.display = "none";
+                        document.getElementById("banUser").style.display = "none";
+                        document.getElementById("userToBan").style.display = "none";
+                        document.getElementById("makeAdmin").style.display = "none";
+                        document.getElementById("pmform").style.display = "none";
+                        document.getElementById("leaving").style.display = "none";
+                        document.getElementById("printUsername").textContent = username; 
+                        homepage();
+                        displayChats();
+                    }  
+                } 
+            
+            });
+            
+            //grabs data from chatStatus and creates chat + reloads homepage 
+            socketio.on("chatStatus",function(data) {
+                if(!data["result"]){
+                    alert("chat name in use, please choose another chat name");
+                }
+            
+                if(data["result"]){
+                    alert("chat created");
+                    currRoom = data["chatCreated"];
+                    console.log(data["result"]);
+                    document.getElementById("chatters").style.display = "block";
+                    document.getElementById("messages").style.display = "block";
+                    document.getElementById("pmform").style.display = "block";
+                    document.getElementById("sendBtn").style.display = "block";
+                    document.getElementById("message_input").style.display = "block";
+                    document.getElementById("leaving").style.display = "block";
+                    document.getElementById("privateChatForm").style.display = "none";
+                    document.getElementById("newChat").style.display = "none";
+                    document.getElementById("newChatBtn").style.display = "none";
+                    document.getElementById("joinStuff").style.display = "none";
+                    document.getElementById("kickUser").style.display = "block";
+                    document.getElementById("userToKick").style.display = "block";
+                    document.getElementById("banUser").style.display = "block";
+                    document.getElementById("userToBan").style.display = "block";
+                    document.getElementById("makeAdmin").style.display = "block";
+                    document.getElementById("allChats").style.display = "none";
+                    document.getElementById("newFriend").style.display = "none";
+                    displayUsers(currRoom);
+                    displayChats();
+                }   
+            });
+        
+            socketio.on("setChat" , function(data){
+                socketio.emit("getChatData", {chatName: data["currChat"]});
+            })
+        
+            socketio.on("displayUsers", function(data){
+                //assigns an html element to each user using a for loop, and prints it at the top of the page
+                console.log(data);
+                let ev4 = document.getElementById("chatters");
+                while (ev4.lastChild) {
+                    ev4.removeChild(ev4.lastChild);
+                }
+                document.getElementById("chatters").appendChild(document.createTextNode("Users in chat:"));
+                document.getElementById("chatters").appendChild(document.createElement("br"));
+
+                for(let i = 0; i < data["chatUsers1"].length; i++){
+                    document.getElementById("chatters").appendChild(document.createElement("br"));
+                    document.getElementById("chatters").appendChild(document.createTextNode(data["chatUsers1"][i]));
+                }
+                document.getElementById("chatters").appendChild(document.createElement("br"));
+                document.getElementById("chatters").appendChild(document.createTextNode("current room is : " + currRoom));
+
+                
+            })
+        
+            //needs to grab the chats dictionary 
+            function homePageData(){
+                socketio.emit("homePageData");
+            }
+
+        
+            //prints out the specific names of each chat from chats dictionary
+            socketio.on("homePage", function(data){
+                currentChats = data["chats"]; 
+                for (const[key, value] of Object.entries(currentChats)){
+
+                }
+            })
+
+            socketio.on("recieveAdmins", function(data){
+                currAdmins = data["admins"]
+                console.log(currAdmins)
+
+                for(let i = 0; i <currAdmins.length; i++){
+                        if(username == currAdmins[i]){
+                            console.log("if1")
+                            document.getElementById("kickUser").style.display = "block";
+                            document.getElementById("userToKick").style.display = "block";
+                            document.getElementById("banUser").style.display = "block";
+                            document.getElementById("userToBan").style.display = "block";
+                            document.getElementById("makeAdmin").style.display = "block";
+                        } else if(data["newAdmin"] && username == data["username"]){
+                            console.log("adding a new admin")
+                            document.getElementById("kickUser").style.display = "block";
+                            document.getElementById("userToKick").style.display = "block";
+                            document.getElementById("banUser").style.display = "block";
+                            document.getElementById("userToBan").style.display = "block";
+                            document.getElementById("makeAdmin").style.display = "block";
+                        }
+                    }
+                    if(data["newAdmin1"]){
+                        console.log("here here ehere herherhe")
+                            document.getElementById("kickUser").style.display = "block";
+                            document.getElementById("userToKick").style.display = "block";
+                            document.getElementById("banUser").style.display = "block";
+                            document.getElementById("userToBan").style.display = "block";
+                            document.getElementById("makeAdmin").style.display = "block";
+                    }    
+            })
+
+            socketio.on("joinedChat", function(data){
+                if(data["success"]){
+                    currRoom = data["currChat"];
+                    console.log("new admin: " + data["newAdmin1"])
+                    console.log("you have joined " + currRoom);
+                    document.getElementById("chatters").style.display = "block";
+                    document.getElementById("messages").style.display = "block";
+                    document.getElementById("pmform").style.display = "block";
+                    document.getElementById("sendBtn").style.display = "block";
+                    document.getElementById("message_input").style.display = "block";
+                    document.getElementById("leaving").style.display = "block";
+                    document.getElementById("privateChatForm").style.display = "none";
+                    document.getElementById("newChat").style.display = "none";
+                    document.getElementById("newChatBtn").style.display = "none";
+                    document.getElementById("joinStuff").style.display = "none";
+                    document.getElementById("allChats").style.display = "none";
+                    document.getElementById("newFriend").style.display = "none";
+                    displayUsers(currRoom);
+                   
+                    //getAdmins not returning in time
+                    getAdmins()
+
+
+
+                }
+                if(!data["success"]){
+                    console.log("you failed to join the chat, success is false")
+                }
+            })
+        
+            //function to join a chatroom 
+            function displayUsers(Room){
+                console.log(Room);
+                socketio.emit("getChatData", {chatName : Room});
+                console.log("current room" + Room)
+            }
+
+            function displayChats(){
+                socketio.emit("getChats", {});
+            }
+
+            function newFriend(){
+                var newFriend = document.getElementById("newFriendID").value;
+                socketio.emit("newFriend", {username : username, newFriend: newFriend})
+            }
+            function kick(){
+                var kickedUser = document.getElementById("userToKick").value;
+                socketio.emit("kickUser", {username : username, room : currRoom, kickedUser: kickedUser})
+            }
+        
+            function ban(){
+                var bannedUser = document.getElementById("userToBan").value;
+                socketio.emit("banUser", {username : username, room : currRoom, bannedUser: bannedUser})
+            }
+
+            function addAdmin(){
+                var adminedUser = document.getElementById("userToAdmin").value;
+                socketio.emit("addAdmin", {username : username, room : currRoom, adminedUser: adminedUser})
+            }
+
+            function homepage(){
+                document.getElementById("home").style.display = "block";
+                document.getElementById("newuser").style.display = "none";
+                document.getElementById("sendBtn").style.display = "none";
+                document.getElementById("message_input").style.display = "none";
+            }
+
+            function getAdmins(){
+                socketio.emit("getAdmins", {chatName: currRoom})
+            }
+
+            function joinChat(){
+                var chatName = document.getElementById("joinChatID").value;
+                var password = document.getElementById("joinChatPW").value;
+                console.log(chatName);
+                socketio.emit("joinChat", {chatName: chatName, username : username, password : password});
+            }
+
+            //function to create a chatroom
+            function newChat(){
+                var chatName = document.getElementById("newChat").value;
+                socketio.emit("newChat", {username: username, chatName : chatName, password : "", isPrivate : false});
+                console.log("here");
+            }
+        
+            function newPrivateChat(){
+                var chatName = document.getElementById("newPrivateChatID").value;
+                var password = document.getElementById("roomPW").value;
+                socketio.emit("newChat", {username: username, chatName: chatName, password : password, isPrivate : true});
+            }
+            //function to send a message (FIX)
+            function sendMessage(){
+                console.log(currRoom);
+                var msg = document.getElementById("message_input").value;
+                socketio.emit("message_to_server", {message:msg, room: currRoom, username : username});
+            }
+
+            //function to set a user
+            function setUser(){
+                if(username == ""){
+                    var user = document.getElementById("username").value;
+                    username = user; 
+                    socketio.emit("setUser", {user:user});
+                } 
+            }
+
+            function privateMessage(){
+                var message = document.getElementById("pm").value;
+                var reciever = document.getElementById("userPM").value;
+                socketio.emit("newPM", {privateMessage : message, username: username, room: currRoom, reciever : reciever});
+            }
+
+            socketio.on("privateMessage", function(data){
+                if(username == data["username"] || username == data["reciever"]){
+                    document.getElementById("messages").appendChild(document.createElement("hr"));
+                    document.getElementById("messages").appendChild(document.createTextNode(data["username"] + "(pm): " + data['message']));
+                }
+            })
+
+            function leaveRoom(){
+                currRoomTemp = currRoom
+                console.log("a" + currRoomTemp)
+                currRoom = ""
+                console.log("b" + currRoomTemp)
+                socketio.emit("leaving", {username: username, currRoom: currRoomTemp})
+            }
+
+            socketio.on("leavingStatus", function(data){
+                if(data["message"]){
+                    console.log(currRoom)
+                    console.log("the result was true");
+                    if(username == data["username"]){
+                        console.log("made it into the second if")
+                        document.getElementById("chatters").style.display = "none";
+                        //document.getElementById("messages").style.display = "none";
+                        document.getElementById("pmform").style.display = "none";
+                        //document.getElementById("sendBtn").style.display = "none";
+
+                        let ev4 = document.getElementById("messages");
+                        while(ev4.lastChild) {
+                            ev4.removeChild(ev4.lastChild);
+                        }
+
+                        document.getElementById("sendBtn").style.display = "none";
+                        document.getElementById("message_input").style.display = "none";
+                        document.getElementById("leaving").style.display = "none";
+                        document.getElementById("privateChatForm").style.display = "block";
+                        document.getElementById("newChat").style.display = "block";
+                        document.getElementById("newChatBtn").style.display = "block";
+                        document.getElementById("joinStuff").style.display = "block";
+                        document.getElementById("kickUser").style.display = "none";
+                        document.getElementById("userToKick").style.display = "none";
+                        document.getElementById("banUser").style.display = "none";
+                        document.getElementById("userToBan").style.display = "none";
+                        document.getElementById("makeAdmin").style.display = "none";
+                        document.getElementById("allChats").style.display = "block";
+                        document.getElementById("newFriend").style.display = "block";
+                        socketio.emit("socketLeave", {leaveRoom: data["currRoom1"]})
+                    }
+                    else{
+                        console.log("made it into the else" + currRoomTemp)
+                        displayUsers(data["currRoom1"])
+                    }
+                }
+            })
+
+            socketio.on("ListOfChats", function(data){
+                //assigns an html element to each user using a for loop, and prints it at the top of the page
+                console.log(data);
+                let ev = document.getElementById("allChats");
+                while (ev.lastChild) {
+                    ev.removeChild(ev.lastChild);
+                }
+                document.getElementById("allChats").appendChild(document.createTextNode("Existing Chats:"));
+                // document.getElementById("allChats").appendChild(document.createElement("br"));
+                for(let i = 0; i < data["allChats"].length; i++){
+                    document.getElementById("allChats").appendChild(document.createElement("br"));
+                    document.getElementById("allChats").appendChild(document.createTextNode(data["allChats"][i]));
+                }
+            })
+
+        </script>
+    </body>
+</html>
