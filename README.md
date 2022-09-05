@@ -11,3 +11,7 @@ This chat page was created using Node.JS and Socket.IO. The chat page includes a
 * Socket.IO
 * AWS EC2
 * HTML
+
+## Credits
+
+This project was created as a part of the Washington University course CSE 330, and in collaberation with Yeabsira Lemma.
